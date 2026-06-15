@@ -109,6 +109,7 @@ void updateFeedbackControl();
 void setupVoltageControl();
 
 void updatePressureSensor();
+void startElectrodeSensorTrigger(int bridgeIndex);
 void stopAllSensorTriggers();
 void setupSensorControl();
 
@@ -131,6 +132,8 @@ void handleRoot();
 void handleCycleElectrode1On();
 void handleCycleElectrode2On();
 void handleCycleOff();
+void handleSensorTriggerElectrode1Start();
+void handleSensorTriggerElectrode2Start();
 void handleSensorTriggerOff();
 void handleSet();
 void handleStatus();

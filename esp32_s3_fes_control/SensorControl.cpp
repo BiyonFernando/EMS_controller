@@ -14,6 +14,14 @@ static bool anySensorTriggerElectrodeEnabled()
   return false;
 }
 
+static bool anyTriggerEventSelected(int bridgeIndex)
+{
+  for (int i = 0; i < SENSOR_TRIGGER_EVENT_COUNT; i++) {
+    if (electrodeTriggerEvents[bridgeIndex][i]) return true;
+  }
+  return false;
+}
+
 static bool anySensorStimActive()
 {
   for (int i = 0; i < NUM_HBRIDGES; i++) {
@@ -123,6 +131,40 @@ void updatePressureSensor()
   sensor2High = sensor2HighNow;
   prevSensor1High = sensor1HighNow;
   prevSensor2High = sensor2HighNow;
+}
+
+void startElectrodeSensorTrigger(int bridgeIndex)
+{
+  if (bridgeIndex < 0 || bridgeIndex >= NUM_HBRIDGES) return;
+
+  if (!anyTriggerEventSelected(bridgeIndex)) {
+    Serial.print("Web: Electrode ");
+    Serial.print(bridgeIndex + 1);
+    Serial.println(" sensor trigger not started because no trigger events are selected");
+    return;
+  }
+
+  portENTER_CRITICAL(&timerMux);
+  electrodeSensorTriggerEnabled[bridgeIndex] = true;
+  electrodeCycleEnabled[bridgeIndex] = false;
+  electrodeStimActive[bridgeIndex] = false;
+  electrodeStimStartTime[bridgeIndex] = 0;
+  electrodeSilentUntil[bridgeIndex] = 0;
+  hBridges[bridgeIndex].enabled = false;
+  hBridges[bridgeIndex].lastPulseState = -1;
+  digitalWrite(hBridges[bridgeIndex].posPin, LOW);
+  digitalWrite(hBridges[bridgeIndex].negPin, LOW);
+  sensorTriggerEnabled = true;
+  if (!anyElectrodeCycleEnabled()) {
+    pulseCycleEnabled = false;
+    cyclePhaseOn = false;
+  }
+  pulseOutputEnabled = anySensorStimActive() || (pulseCycleEnabled && cyclePhaseOn);
+  portEXIT_CRITICAL(&timerMux);
+
+  Serial.print("Web: Electrode ");
+  Serial.print(bridgeIndex + 1);
+  Serial.println(" sensor trigger STARTED");
 }
 
 void stopAllSensorTriggers()

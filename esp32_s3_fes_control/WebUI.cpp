@@ -97,6 +97,7 @@ void handleRoot() {
   html += "<div class='label'>Silent Period (s): <span class='value'>" + String(electrodeSilentSeconds[0], 2) + "</span></div>";
   html += "<input type='number' id='e1SilentPeriod' value='" + String(electrodeSilentSeconds[0], 2) + "' step='0.05' min='0'>";
   html += "<button onclick=\"updateValue('e1SilentPeriod', document.getElementById('e1SilentPeriod').value)\">Set Electrode 1 Silent Period</button>";
+  html += "<button onclick=\"location.href='/sensor/electrode1/start'\" style='background: #9C27B0;'>Start Electrode 1 Sensor Trigger</button>";
   html += "</div>";
   html += "<div style='padding:10px 0;'>";
   html += "<h4 style='margin:8px 0;'>Electrode 2 Trigger Events</h4>";
@@ -110,6 +111,7 @@ void handleRoot() {
   html += "<div class='label'>Silent Period (s): <span class='value'>" + String(electrodeSilentSeconds[1], 2) + "</span></div>";
   html += "<input type='number' id='e2SilentPeriod' value='" + String(electrodeSilentSeconds[1], 2) + "' step='0.05' min='0'>";
   html += "<button onclick=\"updateValue('e2SilentPeriod', document.getElementById('e2SilentPeriod').value)\">Set Electrode 2 Silent Period</button>";
+  html += "<button onclick=\"location.href='/sensor/electrode2/start'\" style='background: #9C27B0;'>Start Electrode 2 Sensor Trigger</button>";
   html += "</div>";
   html += "<button onclick=\"location.href='/sensor/off'\" style='background: #607D8B;'>Disable Sensor Trigger</button>";
   html += "</div>";
@@ -236,20 +238,24 @@ void handleSensorTriggerOff() {
   server.send(303);
 }
 
+void handleSensorTriggerElectrode1Start() {
+  startElectrodeSensorTrigger(0);
+  server.sendHeader("Location", "/");
+  server.send(303);
+}
+
+void handleSensorTriggerElectrode2Start() {
+  startElectrodeSensorTrigger(1);
+  server.sendHeader("Location", "/");
+  server.send(303);
+}
+
 static bool anySelectedTriggerForElectrode(int bridgeIndex)
 {
   for (int i = 0; i < SENSOR_TRIGGER_EVENT_COUNT; i++) {
     if (electrodeTriggerEvents[bridgeIndex][i]) return true;
   }
   return false;
-}
-
-static void refreshSensorTriggerEnabled()
-{
-  for (int i = 0; i < NUM_HBRIDGES; i++) {
-    electrodeSensorTriggerEnabled[i] = anySelectedTriggerForElectrode(i);
-  }
-  sensorTriggerEnabled = electrodeSensorTriggerEnabled[0] || electrodeSensorTriggerEnabled[1];
 }
 
 static String getElectrodeSensorState(int bridgeIndex)
@@ -276,10 +282,9 @@ static bool setTriggerEventParam(const String& param, bool checked)
   else return false;
 
   electrodeTriggerEvents[bridgeIndex][eventIndex] = checked;
-  refreshSensorTriggerEnabled();
 
   portENTER_CRITICAL(&timerMux);
-  if (electrodeSensorTriggerEnabled[bridgeIndex]) {
+  if (electrodeSensorTriggerEnabled[bridgeIndex] && !anySelectedTriggerForElectrode(bridgeIndex)) {
     electrodeCycleEnabled[bridgeIndex] = false;
     if (!electrodeStimActive[bridgeIndex]) {
       hBridges[bridgeIndex].enabled = false;
@@ -287,19 +292,8 @@ static bool setTriggerEventParam(const String& param, bool checked)
       digitalWrite(hBridges[bridgeIndex].posPin, LOW);
       digitalWrite(hBridges[bridgeIndex].negPin, LOW);
     }
-  } else {
-    electrodeStimActive[bridgeIndex] = false;
-    electrodeStimStartTime[bridgeIndex] = 0;
-    electrodeSilentUntil[bridgeIndex] = 0;
-    hBridges[bridgeIndex].enabled = false;
-    hBridges[bridgeIndex].lastPulseState = -1;
-    digitalWrite(hBridges[bridgeIndex].posPin, LOW);
-    digitalWrite(hBridges[bridgeIndex].negPin, LOW);
   }
-  if (!anyElectrodeCycleEnabled()) {
-    pulseCycleEnabled = false;
-    cyclePhaseOn = false;
-  }
+  sensorTriggerEnabled = electrodeSensorTriggerEnabled[0] || electrodeSensorTriggerEnabled[1];
   pulseOutputEnabled = electrodeStimActive[0] || electrodeStimActive[1] || (pulseCycleEnabled && cyclePhaseOn);
   portEXIT_CRITICAL(&timerMux);
 
@@ -456,6 +450,8 @@ void setupWebServer()
   server.on("/cycle/electrode1/on", handleCycleElectrode1On);
   server.on("/cycle/electrode2/on", handleCycleElectrode2On);
   server.on("/cycle/off", handleCycleOff);
+  server.on("/sensor/electrode1/start", handleSensorTriggerElectrode1Start);
+  server.on("/sensor/electrode2/start", handleSensorTriggerElectrode2Start);
   server.on("/sensor/off", handleSensorTriggerOff);
   
   server.begin();
