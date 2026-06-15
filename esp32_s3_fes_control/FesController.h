@@ -56,6 +56,14 @@ constexpr unsigned long PULSE_WIDTH_MAX_US = (PULSE_PERIOD_US - PULSE_GAP_US) / 
 
 extern volatile bool pulseOutputEnabled;
 
+enum TriggerMode {
+  TRIGGER_MODE_NONE = 0,
+  TRIGGER_MODE_CYCLIC = 1,
+  TRIGGER_MODE_SENSOR_TRIGGERED = 2
+};
+
+extern volatile TriggerMode activeTriggerMode;
+
 extern bool pulseCycleEnabled;
 extern bool electrodeCycleEnabled[NUM_HBRIDGES];
 extern unsigned long cycleLastToggle;
@@ -92,6 +100,19 @@ extern unsigned long electrodeSilentUntil[NUM_HBRIDGES];
 extern float electrodeStimDurationSeconds[NUM_HBRIDGES];
 extern float electrodeSilentSeconds[NUM_HBRIDGES];
 
+constexpr int SENSOR_EVENT_LOG_CAPACITY = 80;
+constexpr unsigned long SENSOR_LOG_PING_TIMEOUT_MS = 1000;
+
+struct SensorEventLogEntry {
+  unsigned long timestampMs;
+  char eventType[3];
+  uint8_t triggerMask;
+};
+
+extern SensorEventLogEntry sensorEventLog[SENSOR_EVENT_LOG_CAPACITY];
+extern int sensorEventLogCount;
+extern unsigned long lastSensorLogPingTime;
+
 constexpr unsigned long OVERCURRENT_RECOVERY_MS = 5000;
 constexpr int COMPARATOR_DEBOUNCE_CHECKS = 2;
 constexpr int COMPARATOR_DEBOUNCE_DELAY_US = 2;
@@ -111,6 +132,10 @@ void setupVoltageControl();
 void updatePressureSensor();
 void startElectrodeSensorTrigger(int bridgeIndex);
 void stopAllSensorTriggers();
+void prepareTriggerMode(TriggerMode requestedMode);
+void stopAllTriggering();
+void noteSensorLogPing();
+String consumeSensorEventLogJson();
 void setupSensorControl();
 
 void setHBridgeOff(HBridgeChannel& hb);
@@ -137,5 +162,6 @@ void handleSensorTriggerElectrode2Start();
 void handleSensorTriggerOff();
 void handleSet();
 void handleStatus();
+void handleSensorLog();
 void setupWebServer();
 void updateWebServer();

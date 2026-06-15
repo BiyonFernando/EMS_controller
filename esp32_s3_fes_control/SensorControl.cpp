@@ -1,4 +1,5 @@
 #include "FesController.h"
+#include <string.h>
 
 static unsigned long secondsToMillis(float seconds)
 {
@@ -30,16 +31,39 @@ static bool anySensorStimActive()
   return false;
 }
 
-static bool triggerSelected(int bridgeIndex, const bool events[SENSOR_TRIGGER_EVENT_COUNT])
+static bool triggerSelectedForEvent(int bridgeIndex, SensorTriggerEvent event)
 {
   if (!electrodeSensorTriggerEnabled[bridgeIndex]) return false;
   if (electrodeStimActive[bridgeIndex]) return false;
   if (millis() < electrodeSilentUntil[bridgeIndex]) return false;
+  return electrodeTriggerEvents[bridgeIndex][event];
+}
 
-  for (int i = 0; i < SENSOR_TRIGGER_EVENT_COUNT; i++) {
-    if (events[i] && electrodeTriggerEvents[bridgeIndex][i]) return true;
+static const char* getSensorEventCode(SensorTriggerEvent event)
+{
+  switch (event) {
+    case SENSOR1_FALLING: return "F1";
+    case SENSOR2_FALLING: return "F2";
+    case SENSOR1_RISING: return "R1";
+    case SENSOR2_RISING: return "R2";
+    default: return "";
   }
-  return false;
+}
+
+static void cacheSensorEvent(SensorTriggerEvent event, uint8_t triggerMask)
+{
+  if (sensorEventLogCount >= SENSOR_EVENT_LOG_CAPACITY) {
+    for (int i = 1; i < SENSOR_EVENT_LOG_CAPACITY; i++) {
+      sensorEventLog[i - 1] = sensorEventLog[i];
+    }
+    sensorEventLogCount = SENSOR_EVENT_LOG_CAPACITY - 1;
+  }
+
+  SensorEventLogEntry& entry = sensorEventLog[sensorEventLogCount++];
+  entry.timestampMs = millis();
+  strncpy(entry.eventType, getSensorEventCode(event), sizeof(entry.eventType));
+  entry.eventType[sizeof(entry.eventType) - 1] = '\0';
+  entry.triggerMask = triggerMask;
 }
 
 static void setSensorTriggeredElectrode(int bridgeIndex, bool enabled)
@@ -53,7 +77,7 @@ static void setSensorTriggeredElectrode(int bridgeIndex, bool enabled)
     digitalWrite(hBridges[bridgeIndex].negPin, LOW);
     hBridges[bridgeIndex].lastPulseState = -1;
   }
-  pulseOutputEnabled = anySensorStimActive() || (pulseCycleEnabled && cyclePhaseOn);
+  pulseOutputEnabled = anySensorStimActive();
   portEXIT_CRITICAL(&timerMux);
 }
 
@@ -92,6 +116,22 @@ static void updateSensorStimTimers()
   }
 }
 
+static void handleOneSensorTriggerEvent(SensorTriggerEvent event)
+{
+  uint8_t triggerMask = 0;
+
+  for (int i = 0; i < NUM_HBRIDGES; i++) {
+    if (triggerSelectedForEvent(i, event)) {
+      triggerMask |= (1U << i);
+    }
+  }
+
+  cacheSensorEvent(event, triggerMask);
+
+  if (triggerMask & 0x01) startSensorStim(0);
+  if (triggerMask & 0x02) startSensorStim(1);
+}
+
 static void handleSensorTriggerEvents(bool sensor1HighNow, bool sensor2HighNow)
 {
   bool events[SENSOR_TRIGGER_EVENT_COUNT] = {
@@ -101,15 +141,27 @@ static void handleSensorTriggerEvents(bool sensor1HighNow, bool sensor2HighNow)
     !prevSensor2High && sensor2HighNow,
   };
 
-  for (int i = 0; i < NUM_HBRIDGES; i++) {
-    if (triggerSelected(i, events)) {
-      startSensorStim(i);
+  for (int eventIndex = 0; eventIndex < SENSOR_TRIGGER_EVENT_COUNT; eventIndex++) {
+    if (events[eventIndex]) {
+      handleOneSensorTriggerEvent((SensorTriggerEvent)eventIndex);
     }
+  }
+}
+
+static void updateSensorLogWatchdog()
+{
+  if (activeTriggerMode != TRIGGER_MODE_SENSOR_TRIGGERED || !sensorTriggerEnabled) return;
+  if (lastSensorLogPingTime == 0) return;
+
+  if (millis() - lastSensorLogPingTime > SENSOR_LOG_PING_TIMEOUT_MS) {
+    stopAllTriggering();
+    Serial.println("Safety: sensor trigger disabled because Web UI log ping timed out");
   }
 }
 
 void updatePressureSensor()
 {
+  updateSensorLogWatchdog();
   updateSensorStimTimers();
 
   if (millis() - lastPressureTime < PRESSURE_SAMPLE_MS) return;
@@ -123,7 +175,7 @@ void updatePressureSensor()
   sensor2Percent = (adc2_raw / 4095.0f) * 100.0f;
   bool sensor2HighNow = (sensor2Percent >= SENSOR2_THRESHOLD_PERCENT);
 
-  if (sensorTriggerEnabled) {
+  if (activeTriggerMode == TRIGGER_MODE_SENSOR_TRIGGERED && sensorTriggerEnabled) {
     handleSensorTriggerEvents(sensor1HighNow, sensor2HighNow);
   }
 
@@ -144,9 +196,10 @@ void startElectrodeSensorTrigger(int bridgeIndex)
     return;
   }
 
+  prepareTriggerMode(TRIGGER_MODE_SENSOR_TRIGGERED);
+
   portENTER_CRITICAL(&timerMux);
   electrodeSensorTriggerEnabled[bridgeIndex] = true;
-  electrodeCycleEnabled[bridgeIndex] = false;
   electrodeStimActive[bridgeIndex] = false;
   electrodeStimStartTime[bridgeIndex] = 0;
   electrodeSilentUntil[bridgeIndex] = 0;
@@ -155,11 +208,8 @@ void startElectrodeSensorTrigger(int bridgeIndex)
   digitalWrite(hBridges[bridgeIndex].posPin, LOW);
   digitalWrite(hBridges[bridgeIndex].negPin, LOW);
   sensorTriggerEnabled = true;
-  if (!anyElectrodeCycleEnabled()) {
-    pulseCycleEnabled = false;
-    cyclePhaseOn = false;
-  }
-  pulseOutputEnabled = anySensorStimActive() || (pulseCycleEnabled && cyclePhaseOn);
+  lastSensorLogPingTime = millis();
+  pulseOutputEnabled = anySensorStimActive();
   portEXIT_CRITICAL(&timerMux);
 
   Serial.print("Web: Electrode ");
@@ -169,28 +219,33 @@ void startElectrodeSensorTrigger(int bridgeIndex)
 
 void stopAllSensorTriggers()
 {
-  portENTER_CRITICAL(&timerMux);
-  for (int i = 0; i < NUM_HBRIDGES; i++) {
-    bool wasSensorControlled = electrodeSensorTriggerEnabled[i] || electrodeStimActive[i];
-    electrodeSensorTriggerEnabled[i] = false;
-    electrodeStimActive[i] = false;
-    electrodeStimStartTime[i] = 0;
-    electrodeSilentUntil[i] = 0;
-    for (int eventIndex = 0; eventIndex < SENSOR_TRIGGER_EVENT_COUNT; eventIndex++) {
-      electrodeTriggerEvents[i][eventIndex] = false;
-    }
-    if (wasSensorControlled && !electrodeCycleEnabled[i]) {
-      hBridges[i].enabled = false;
-      hBridges[i].lastPulseState = -1;
-      digitalWrite(hBridges[i].posPin, LOW);
-      digitalWrite(hBridges[i].negPin, LOW);
-    }
-  }
-  sensorTriggerEnabled = false;
-  pulseOutputEnabled = pulseCycleEnabled && cyclePhaseOn;
-  portEXIT_CRITICAL(&timerMux);
-
+  stopAllTriggering();
   Serial.println("Web: Sensor trigger mode DISABLED");
+}
+
+void noteSensorLogPing()
+{
+  lastSensorLogPingTime = millis();
+}
+
+String consumeSensorEventLogJson()
+{
+  String json = "{\"entries\":[";
+
+  for (int i = 0; i < sensorEventLogCount; i++) {
+    if (i > 0) json += ",";
+    json += "{\"timestamp\":";
+    json += String(sensorEventLog[i].timestampMs);
+    json += ",\"event\":\"";
+    json += sensorEventLog[i].eventType;
+    json += "\",\"triggered\":";
+    json += String(sensorEventLog[i].triggerMask);
+    json += "}";
+  }
+
+  json += "]}";
+  sensorEventLogCount = 0;
+  return json;
 }
 
 void setupSensorControl()

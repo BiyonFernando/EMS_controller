@@ -20,6 +20,8 @@ float previousError = 0.0f;
 
 volatile bool pulseOutputEnabled = false;
 
+volatile TriggerMode activeTriggerMode = TRIGGER_MODE_NONE;
+
 bool pulseCycleEnabled = false;
 bool electrodeCycleEnabled[NUM_HBRIDGES] = {false, false};
 unsigned long cycleLastToggle = 0;
@@ -47,3 +49,7 @@ unsigned long electrodeStimStartTime[NUM_HBRIDGES] = {0, 0};
 unsigned long electrodeSilentUntil[NUM_HBRIDGES] = {0, 0};
 float electrodeStimDurationSeconds[NUM_HBRIDGES] = {0.55f, 0.55f};
 float electrodeSilentSeconds[NUM_HBRIDGES] = {1.05f, 1.05f};
+
+SensorEventLogEntry sensorEventLog[SENSOR_EVENT_LOG_CAPACITY];
+int sensorEventLogCount = 0;
+unsigned long lastSensorLogPingTime = 0;

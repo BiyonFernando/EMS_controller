@@ -2,6 +2,7 @@
 #include <WiFi.h>
 
 static String getElectrodeSensorState(int bridgeIndex);
+static String getTriggerModeLabel();
 
 void handleRoot() {
   float currentVout = readOutputVoltage();
@@ -28,6 +29,42 @@ void handleRoot() {
   html += ".warning { background: #fff3cd; color: #856404; }";
   html += "</style>";
   html += "<script>";
+  html += "var sensorLogRows = [];";
+  html += "function collectSensorLogs() {";
+  html += "  fetch('/sensor/log')";
+  html += "    .then(response => response.json())";
+  html += "    .then(data => {";
+  html += "      (data.entries || []).forEach(entry => sensorLogRows.push(entry));";
+  html += "    })";
+  html += "    .catch(() => {});";
+  html += "}";
+  html += "function downloadSensorCsv() {";
+  html += "  var csv = 'timestamp,event,triggered\\n';";
+  html += "  sensorLogRows.forEach(row => {";
+  html += "    csv += row.timestamp + ',' + row.event + ',' + row.triggered + '\\n';";
+  html += "  });";
+  html += "  var blob = new Blob([csv], {type: 'text/csv'});";
+  html += "  var link = document.createElement('a');";
+  html += "  link.href = URL.createObjectURL(blob);";
+  html += "  link.download = 'sensor_trigger_log.csv';";
+  html += "  document.body.appendChild(link);";
+  html += "  link.click();";
+  html += "  document.body.removeChild(link);";
+  html += "  URL.revokeObjectURL(link.href);";
+  html += "}";
+  html += "function disableSensorTrigger() {";
+  html += "  fetch('/sensor/log')";
+  html += "    .then(response => response.json())";
+  html += "    .then(data => {";
+  html += "      (data.entries || []).forEach(entry => sensorLogRows.push(entry));";
+  html += "      downloadSensorCsv();";
+  html += "      location.href = '/sensor/off';";
+  html += "    })";
+  html += "    .catch(() => {";
+  html += "      downloadSensorCsv();";
+  html += "      location.href = '/sensor/off';";
+  html += "    });";
+  html += "}";
   html += "function updateValue(param, value) {";
   html += "  fetch('/set?param=' + param + '&value=' + value)";
   html += "    .then(response => response.text())";
@@ -61,7 +98,7 @@ void handleRoot() {
   html += "      document.querySelectorAll('.status')[8].innerHTML = 'Electrode 1 Overcurrent: ' + oc1;";
   html += "      var oc2 = data.overcurrentProtection2 ? '<span style=\"color:red;\">ACTIVE (' + (data.timeSinceOvercurrent2/1000).toFixed(1) + 's)</span>' : '<span style=\"color:green;\">Normal</span>';";
   html += "      document.querySelectorAll('.status')[9].innerHTML = 'Electrode 2 Overcurrent: ' + oc2;";
-  html += "      document.querySelectorAll('.status')[10].innerHTML = 'EMS Cycle: <span class=\"value\">' + (data.pulseCycleEnabled ? 'RUNNING' : 'STOPPED') + '</span> | Electrode 1 Cycle: <span class=\"value\">' + (data.electrode1CycleEnabled ? 'ON' : 'OFF') + '</span> | Electrode 2 Cycle: <span class=\"value\">' + (data.electrode2CycleEnabled ? 'ON' : 'OFF') + '</span>';";
+  html += "      document.querySelectorAll('.status')[10].innerHTML = 'Trigger Mode: <span class=\"value\">' + data.triggerMode + '</span> | Electrode 1 Cycle: <span class=\"value\">' + (data.electrode1CycleEnabled ? 'ON' : 'OFF') + '</span> | Electrode 2 Cycle: <span class=\"value\">' + (data.electrode2CycleEnabled ? 'ON' : 'OFF') + '</span>';";
   html += "      var pColor = data.sensor1High ? 'green' : 'orange';";
   html += "      document.querySelectorAll('.status')[11].innerHTML = 'Sensor 1 (GPIO2): <span style=\"color:' + pColor + ';font-weight:bold;\">' + (data.sensor1High ? 'HIGH' : 'LOW') + '</span> (' + data.sensor1Percent.toFixed(1) + '%)';";
   html += "      var s2Color = data.sensor2High ? 'green' : 'orange';";
@@ -72,6 +109,7 @@ void handleRoot() {
   html += "    });";  
   html += "}";
   html += "setInterval(updateStatus, 1000);";
+  html += "setInterval(collectSensorLogs, 500);";
   html += "</script>";
   html += "</head><body>";
   html += "<div class='container'>";
@@ -113,7 +151,7 @@ void handleRoot() {
   html += "<button onclick=\"updateValue('e2SilentPeriod', document.getElementById('e2SilentPeriod').value)\">Set Electrode 2 Silent Period</button>";
   html += "<button onclick=\"location.href='/sensor/electrode2/start'\" style='background: #9C27B0;'>Start Electrode 2 Sensor Trigger</button>";
   html += "</div>";
-  html += "<button onclick=\"location.href='/sensor/off'\" style='background: #607D8B;'>Disable Sensor Trigger</button>";
+  html += "<button onclick=\"disableSensorTrigger()\" style='background: #607D8B;'>Disable Sensor Trigger</button>";
   html += "</div>";
   
   html += "<div class='section'>";
@@ -131,7 +169,7 @@ void handleRoot() {
   html += "<div class='status warning'>Electrode 1 Overcurrent: " + oc1Status + "</div>";
   String oc2Status = hBridges[1].overcurrentProtection ? "<span style='color:red;'>ACTIVE</span>" : "<span style='color:green;'>Normal</span>";
   html += "<div class='status warning'>Electrode 2 Overcurrent: " + oc2Status + "</div>";
-  html += "<div class='status'>EMS Cycle: <span class='value'>" + String(pulseCycleEnabled ? "RUNNING" : "STOPPED") + "</span> | Electrode 1 Cycle: <span class='value'>" + String(electrodeCycleEnabled[0] ? "ON" : "OFF") + "</span> | Electrode 2 Cycle: <span class='value'>" + String(electrodeCycleEnabled[1] ? "ON" : "OFF") + "</span></div>";
+  html += "<div class='status'>Trigger Mode: <span class='value'>" + getTriggerModeLabel() + "</span> | Electrode 1 Cycle: <span class='value'>" + String(electrodeCycleEnabled[0] ? "ON" : "OFF") + "</span> | Electrode 2 Cycle: <span class='value'>" + String(electrodeCycleEnabled[1] ? "ON" : "OFF") + "</span></div>";
   String pColor = sensor1High ? "green" : "orange";
   html += "<div class='status'>Sensor 1 (GPIO2): <span style='color:" + pColor + ";font-weight:bold;'>" + String(sensor1High ? "HIGH" : "LOW") + "</span> (" + String(sensor1Percent, 1) + "%)</div>";
   String s2Color = sensor2High ? "green" : "orange";
@@ -211,22 +249,7 @@ void handleCycleElectrode2On() {
 }
 
 void handleCycleOff() {
-  portENTER_CRITICAL(&timerMux);
-  pulseCycleEnabled = false;
-  electrodeCycleEnabled[0] = false;
-  electrodeCycleEnabled[1] = false;
-  cyclePhaseOn = false;
-  for (int i = 0; i < NUM_HBRIDGES; i++) {
-    if (!electrodeStimActive[i]) {
-      hBridges[i].enabled = false;
-      hBridges[i].lastPulseState = -1;
-      digitalWrite(hBridges[i].posPin, LOW);
-      digitalWrite(hBridges[i].negPin, LOW);
-    }
-  }
-  pulseOutputEnabled = electrodeStimActive[0] || electrodeStimActive[1];
-  portEXIT_CRITICAL(&timerMux);
-
+  stopAllTriggering();
   Serial.println("Web: EMS cycle stopped");
   server.sendHeader("Location", "/");
   server.send(303);
@@ -266,6 +289,15 @@ static String getElectrodeSensorState(int bridgeIndex)
   return "DISABLED";
 }
 
+static String getTriggerModeLabel()
+{
+  switch (activeTriggerMode) {
+    case TRIGGER_MODE_CYCLIC: return "CYCLIC";
+    case TRIGGER_MODE_SENSOR_TRIGGERED: return "SENSOR_TRIGGERED";
+    default: return "NONE";
+  }
+}
+
 static bool setTriggerEventParam(const String& param, bool checked)
 {
   int bridgeIndex = -1;
@@ -285,15 +317,21 @@ static bool setTriggerEventParam(const String& param, bool checked)
 
   portENTER_CRITICAL(&timerMux);
   if (electrodeSensorTriggerEnabled[bridgeIndex] && !anySelectedTriggerForElectrode(bridgeIndex)) {
+    electrodeSensorTriggerEnabled[bridgeIndex] = false;
     electrodeCycleEnabled[bridgeIndex] = false;
-    if (!electrodeStimActive[bridgeIndex]) {
-      hBridges[bridgeIndex].enabled = false;
-      hBridges[bridgeIndex].lastPulseState = -1;
-      digitalWrite(hBridges[bridgeIndex].posPin, LOW);
-      digitalWrite(hBridges[bridgeIndex].negPin, LOW);
-    }
+    electrodeStimActive[bridgeIndex] = false;
+    electrodeStimStartTime[bridgeIndex] = 0;
+    electrodeSilentUntil[bridgeIndex] = 0;
+    hBridges[bridgeIndex].enabled = false;
+    hBridges[bridgeIndex].lastPulseState = -1;
+    digitalWrite(hBridges[bridgeIndex].posPin, LOW);
+    digitalWrite(hBridges[bridgeIndex].negPin, LOW);
   }
   sensorTriggerEnabled = electrodeSensorTriggerEnabled[0] || electrodeSensorTriggerEnabled[1];
+  if (!sensorTriggerEnabled && activeTriggerMode == TRIGGER_MODE_SENSOR_TRIGGERED) {
+    activeTriggerMode = TRIGGER_MODE_NONE;
+    lastSensorLogPingTime = 0;
+  }
   pulseOutputEnabled = electrodeStimActive[0] || electrodeStimActive[1] || (pulseCycleEnabled && cyclePhaseOn);
   portEXIT_CRITICAL(&timerMux);
 
@@ -402,6 +440,7 @@ void handleStatus() {
   json += "\"timeSinceOvercurrent1\":" + String(timeSinceOvercurrent1) + ",";
   json += "\"overcurrentProtection2\":" + String(hBridges[1].overcurrentProtection ? "true" : "false") + ",";
   json += "\"timeSinceOvercurrent2\":" + String(timeSinceOvercurrent2) + ",";
+  json += "\"triggerMode\":\"" + getTriggerModeLabel() + "\",";
   json += "\"pulseCycleEnabled\":" + String(pulseCycleEnabled ? "true" : "false") + ",";
   json += "\"electrode1CycleEnabled\":" + String(electrodeCycleEnabled[0] ? "true" : "false") + ",";
   json += "\"electrode2CycleEnabled\":" + String(electrodeCycleEnabled[1] ? "true" : "false") + ",";
@@ -433,6 +472,12 @@ void handleStatus() {
   server.send(200, "application/json", json);
 }
 
+void handleSensorLog()
+{
+  noteSensorLogPing();
+  server.send(200, "application/json", consumeSensorEventLogJson());
+}
+
 void setupWebServer()
 {
   Serial.println("Setting up WiFi Access Point...");
@@ -446,6 +491,7 @@ void setupWebServer()
 
   server.on("/", handleRoot);
   server.on("/status", handleStatus);
+  server.on("/sensor/log", handleSensorLog);
   server.on("/set", handleSet);
   server.on("/cycle/electrode1/on", handleCycleElectrode1On);
   server.on("/cycle/electrode2/on", handleCycleElectrode2On);

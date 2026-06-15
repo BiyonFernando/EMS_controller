@@ -79,10 +79,14 @@ void IRAM_ATTR onPulseTimer() {
   portENTER_CRITICAL_ISR(&timerMux);
 
   unsigned long phaseUs = micros() % PULSE_PERIOD_US;
-  bool cycleActive = pulseCycleEnabled && cyclePhaseOn;
 
   for (int i = 0; i < NUM_HBRIDGES; i++) {
-    bool bridgeEnabled = electrodeStimActive[i] || (electrodeCycleEnabled[i] && cycleActive);
+    bool bridgeEnabled = false;
+    if (activeTriggerMode == TRIGGER_MODE_CYCLIC) {
+      bridgeEnabled = electrodeCycleEnabled[i] && pulseCycleEnabled && cyclePhaseOn;
+    } else if (activeTriggerMode == TRIGGER_MODE_SENSOR_TRIGGERED) {
+      bridgeEnabled = electrodeStimActive[i];
+    }
     updateHBridgePulse(hBridges[i], phaseUs, bridgeEnabled && hBridges[i].enabled);
   }
 
@@ -96,32 +100,61 @@ bool anyElectrodeCycleEnabled() {
   return false;
 }
 
-static bool anySensorStimActiveForPulseGate()
+static void clearTriggerState()
 {
   for (int i = 0; i < NUM_HBRIDGES; i++) {
-    if (electrodeStimActive[i]) return true;
+    electrodeCycleEnabled[i] = false;
+    electrodeSensorTriggerEnabled[i] = false;
+    electrodeStimActive[i] = false;
+    electrodeStimStartTime[i] = 0;
+    electrodeSilentUntil[i] = 0;
+    hBridges[i].enabled = false;
+    hBridges[i].lastPulseState = -1;
+    digitalWrite(hBridges[i].posPin, LOW);
+    digitalWrite(hBridges[i].negPin, LOW);
   }
-  return false;
+  pulseCycleEnabled = false;
+  cyclePhaseOn = false;
+  pulseOutputEnabled = false;
+  sensorTriggerEnabled = false;
+  lastSensorLogPingTime = 0;
+}
+
+void prepareTriggerMode(TriggerMode requestedMode)
+{
+  portENTER_CRITICAL(&timerMux);
+  if (activeTriggerMode != requestedMode) {
+    clearTriggerState();
+    activeTriggerMode = requestedMode;
+  } else if (activeTriggerMode == TRIGGER_MODE_NONE) {
+    activeTriggerMode = requestedMode;
+  }
+  portEXIT_CRITICAL(&timerMux);
+}
+
+void stopAllTriggering()
+{
+  portENTER_CRITICAL(&timerMux);
+  clearTriggerState();
+  activeTriggerMode = TRIGGER_MODE_NONE;
+  portEXIT_CRITICAL(&timerMux);
 }
 
 void startElectrodeCycle(int bridgeIndex) {
   if (bridgeIndex < 0 || bridgeIndex >= NUM_HBRIDGES) return;
 
+  bool cycleAlreadyRunning = (activeTriggerMode == TRIGGER_MODE_CYCLIC && pulseCycleEnabled);
+  prepareTriggerMode(TRIGGER_MODE_CYCLIC);
+
   portENTER_CRITICAL(&timerMux);
-  electrodeSensorTriggerEnabled[bridgeIndex] = false;
-  electrodeStimActive[bridgeIndex] = false;
-  electrodeStimStartTime[bridgeIndex] = 0;
-  electrodeSilentUntil[bridgeIndex] = 0;
-  for (int eventIndex = 0; eventIndex < SENSOR_TRIGGER_EVENT_COUNT; eventIndex++) {
-    electrodeTriggerEvents[bridgeIndex][eventIndex] = false;
-  }
-  sensorTriggerEnabled = electrodeSensorTriggerEnabled[0] || electrodeSensorTriggerEnabled[1];
   electrodeCycleEnabled[bridgeIndex] = true;
   hBridges[bridgeIndex].enabled = true;
   pulseCycleEnabled = true;
-  cyclePhaseOn = true;
-  cycleLastToggle = millis();
-  pulseOutputEnabled = true;
+  if (!cycleAlreadyRunning) {
+    cyclePhaseOn = true;
+    cycleLastToggle = millis();
+  }
+  pulseOutputEnabled = cyclePhaseOn;
   portEXIT_CRITICAL(&timerMux);
 
   Serial.print("Web: Electrode ");
@@ -130,10 +163,11 @@ void startElectrodeCycle(int bridgeIndex) {
 }
 
 void updatePulseCycle() {
-  if (!pulseCycleEnabled) return;
+  if (activeTriggerMode != TRIGGER_MODE_CYCLIC || !pulseCycleEnabled) return;
   if (!anyElectrodeCycleEnabled()) {
     pulseCycleEnabled = false;
-    pulseOutputEnabled = anySensorStimActiveForPulseGate();
+    pulseOutputEnabled = false;
+    activeTriggerMode = TRIGGER_MODE_NONE;
     return;
   }
 
@@ -141,7 +175,7 @@ void updatePulseCycle() {
   unsigned long elapsed = now - cycleLastToggle;
 
   if (cyclePhaseOn && elapsed >= CYCLE_ON_MS) {
-    pulseOutputEnabled = anySensorStimActiveForPulseGate();
+    pulseOutputEnabled = false;
     cyclePhaseOn = false;
     cycleLastToggle = now;
     Serial.println("EMS Cycle: OFF phase");
