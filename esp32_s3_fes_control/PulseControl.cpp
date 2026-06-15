@@ -28,7 +28,7 @@ void setPulseWidth(int bridgeIndex, unsigned long widthUs)
   Serial.print(bridgeIndex + 1);
   Serial.print(" pulse width set to ");
   Serial.print(widthUs);
-  Serial.println(" Âµs");
+  Serial.println(" us");
 }
 
 void IRAM_ATTR updateHBridgePulse(HBridgeChannel& hb, unsigned long phaseUs, bool enabled) {

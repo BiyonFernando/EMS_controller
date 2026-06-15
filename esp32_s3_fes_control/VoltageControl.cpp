@@ -27,31 +27,16 @@ void updateFeedbackControl()
   }
   
   unsigned long currentTime = millis();
-  float dt = (currentTime - lastFeedbackTime) / 1000.0f; // Convert to seconds
+  float dt = (currentTime - lastFeedbackTime) / 1000.0f;
   lastFeedbackTime = currentTime;
 
   float vout = readOutputVoltage();
   float error = TARGET_VOLTAGE - vout;
-  
-  // Calculate derivative term
   float derivative = (error - previousError) / dt;
-  
-  // PD control output
   float controlOutput = Kp * error + Kd * derivative;
-  
-  // Update duty cycle
+
   setDuty(currentDuty + controlOutput);
-  
-  // Store error for next iteration
   previousError = error;
-  
-  // Optional: print for debugging
-  // Serial.print("Vout = ");
-  // Serial.print(vout, 2);
-  // Serial.print(" V, Error = ");
-  // Serial.print(error, 2);
-  // Serial.print(", Control = ");
-  // Serial.println(controlOutput, 4);
 }
 
 void setupVoltageControl()

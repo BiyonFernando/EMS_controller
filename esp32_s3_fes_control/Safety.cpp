@@ -75,7 +75,6 @@ void IRAM_ATTR onComparator1Trigger() {
 
 void updateOvercurrentRecovery()
 {
-  // Per-bridge overcurrent recovery
   for (int i = 0; i < NUM_HBRIDGES; i++) {
     if (hBridges[i].overcurrentProtection) {
       unsigned long timeSinceOvercurrent = millis() - hBridges[i].overcurrentStartTime;
@@ -98,7 +97,6 @@ void setupSafety()
   attachInterrupt(digitalPinToInterrupt(hBridges[1].comparatorPin), onComparator1Trigger, FALLING);
   Serial.println("Overcurrent protection enabled on GPIO6 (H-Bridge 1) and GPIO7 (H-Bridge 2)");
 
-  // Setup PWM for IMAX pins (comparator reference voltage per H-bridge)
   for (int i = 0; i < NUM_HBRIDGES; i++) {
     if (!ledcAttach(hBridges[i].imaxPin, IMAX_PWM_FREQ, IMAX_PWM_RES)) {
       Serial.print("IMAX PWM attach failed on GPIO");

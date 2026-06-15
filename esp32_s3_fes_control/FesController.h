@@ -66,7 +66,7 @@ constexpr unsigned long CYCLE_OFF_MS = 1050;
 extern float SENSOR1_THRESHOLD_PERCENT;
 constexpr unsigned long PRESSURE_SAMPLE_MS = 10;
 extern float sensor1Percent;
-extern bool pressureHigh;
+extern bool sensor1High;
 extern bool prevSensor1High;
 extern unsigned long lastPressureTime;
 

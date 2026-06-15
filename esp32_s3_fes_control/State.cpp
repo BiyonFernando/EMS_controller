@@ -27,7 +27,7 @@ bool cyclePhaseOn = false;
 
 float SENSOR1_THRESHOLD_PERCENT = 50.0f;
 float sensor1Percent = 0.0f;
-bool pressureHigh = false;
+bool sensor1High = false;
 bool prevSensor1High = false;
 unsigned long lastPressureTime = 0;
 

@@ -55,14 +55,14 @@ void handleRoot() {
   html += "      var oc2 = data.overcurrentProtection2 ? '<span style=\"color:red;\">ACTIVE (' + (data.timeSinceOvercurrent2/1000).toFixed(1) + 's)</span>' : '<span style=\"color:green;\">Normal</span>';";
   html += "      document.querySelectorAll('.status')[9].innerHTML = 'Electrode 2 Overcurrent: ' + oc2;";
   html += "      document.querySelectorAll('.status')[10].innerHTML = 'EMS Cycle: <span class=\"value\">' + (data.pulseCycleEnabled ? 'RUNNING' : 'STOPPED') + '</span> | Electrode 1 Cycle: <span class=\"value\">' + (data.electrode1CycleEnabled ? 'ON' : 'OFF') + '</span> | Electrode 2 Cycle: <span class=\"value\">' + (data.electrode2CycleEnabled ? 'ON' : 'OFF') + '</span>';";
-  html += "      var pColor = data.pressureHigh ? 'green' : 'orange';";
-  html += "      document.querySelectorAll('.status')[11].innerHTML = 'Sensor 1 (GPIO2): <span style=\"color:' + pColor + ';font-weight:bold;\">' + (data.pressureHigh ? 'HIGH' : 'LOW') + '</span> (' + data.sensor1Percent.toFixed(1) + '%)';";
+  html += "      var pColor = data.sensor1High ? 'green' : 'orange';";
+  html += "      document.querySelectorAll('.status')[11].innerHTML = 'Sensor 1 (GPIO2): <span style=\"color:' + pColor + ';font-weight:bold;\">' + (data.sensor1High ? 'HIGH' : 'LOW') + '</span> (' + data.sensor1Percent.toFixed(1) + '%)';";
   html += "      var s2Color = data.sensor2High ? 'green' : 'orange';";
   html += "      document.querySelectorAll('.status')[12].innerHTML = 'Sensor 2 (GPIO3): <span style=\"color:' + s2Color + ';font-weight:bold;\">' + (data.sensor2High ? 'HIGH' : 'LOW') + '</span> (' + data.sensor2Percent.toFixed(1) + '%)';";
   html += "      var smColor = data.sensorTriggerEnabled ? (data.smActive ? 'green' : 'blue') : 'gray';";
   html += "      document.querySelectorAll('.status')[13].innerHTML = 'Sensor Trigger SM: <span style=\"color:' + smColor + ';font-weight:bold;\">' + (data.sensorTriggerEnabled ? (data.smActive ? 'ACTIVE' : 'WAITING') : 'DISABLED') + '</span> | Max Time: <span class=\"value\">' + data.sensorTriggerMaxStimSeconds.toFixed(2) + ' s</span> | Electrode 1 Trigger: <span class=\"value\">' + (data.electrode1SensorTriggerEnabled ? 'ON' : 'OFF') + '</span> | Electrode 2 Trigger: <span class=\"value\">' + (data.electrode2SensorTriggerEnabled ? 'ON' : 'OFF') + '</span>';";
-  html += "      document.querySelectorAll('.status')[14].innerHTML = 'Electrode 1 Pulse Width: <span class=\"value\">' + data.pulseWidth1 + ' Âµs</span>';";
-  html += "      document.querySelectorAll('.status')[15].innerHTML = 'Electrode 2 Pulse Width: <span class=\"value\">' + data.pulseWidth2 + ' Âµs</span>';";
+  html += "      document.querySelectorAll('.status')[14].innerHTML = 'Electrode 1 Pulse Width: <span class=\"value\">' + data.pulseWidth1 + ' us</span>';";
+  html += "      document.querySelectorAll('.status')[15].innerHTML = 'Electrode 2 Pulse Width: <span class=\"value\">' + data.pulseWidth2 + ' us</span>';";
   html += "    });";  
   html += "}";
   html += "setInterval(updateStatus, 1000);";
@@ -71,7 +71,6 @@ void handleRoot() {
   html += "<div class='container'>";
   html += "<h1>ESP32 FES Control Panel</h1>";
   
-  // Electrode control (cycle and sensor-triggered modes only)
   html += "<div class='section'>";
   html += "<h2>Electrode Control</h2>";
   html += "<h3 style='margin: 10px 0;'>EMS Cycle Mode (0.55s ON / 1.05s OFF)</h3>";
@@ -89,7 +88,6 @@ void handleRoot() {
   html += "<button onclick=\"location.href='/sensor/off'\" style='background: #607D8B;'>Disable Sensor Trigger</button>";
   html += "</div>";
   
-  // Status section
   html += "<div class='section'>";
   html += "<h2>Current Status</h2>";
   html += "<div class='status'>Target Voltage: <span class='value'>" + String(TARGET_VOLTAGE, 1) + " V</span></div>";
@@ -106,18 +104,17 @@ void handleRoot() {
   String oc2Status = hBridges[1].overcurrentProtection ? "<span style='color:red;'>ACTIVE</span>" : "<span style='color:green;'>Normal</span>";
   html += "<div class='status warning'>Electrode 2 Overcurrent: " + oc2Status + "</div>";
   html += "<div class='status'>EMS Cycle: <span class='value'>" + String(pulseCycleEnabled ? "RUNNING" : "STOPPED") + "</span> | Electrode 1 Cycle: <span class='value'>" + String(electrodeCycleEnabled[0] ? "ON" : "OFF") + "</span> | Electrode 2 Cycle: <span class='value'>" + String(electrodeCycleEnabled[1] ? "ON" : "OFF") + "</span></div>";
-  String pColor = pressureHigh ? "green" : "orange";
-  html += "<div class='status'>Sensor 1 (GPIO2): <span style='color:" + pColor + ";font-weight:bold;'>" + String(pressureHigh ? "HIGH" : "LOW") + "</span> (" + String(sensor1Percent, 1) + "%)</div>";
+  String pColor = sensor1High ? "green" : "orange";
+  html += "<div class='status'>Sensor 1 (GPIO2): <span style='color:" + pColor + ";font-weight:bold;'>" + String(sensor1High ? "HIGH" : "LOW") + "</span> (" + String(sensor1Percent, 1) + "%)</div>";
   String s2Color = sensor2High ? "green" : "orange";
   html += "<div class='status'>Sensor 2 (GPIO3): <span style='color:" + s2Color + ";font-weight:bold;'>" + String(sensor2High ? "HIGH" : "LOW") + "</span> (" + String(sensor2Percent, 1) + "%)</div>";
   String smColor = sensorTriggerEnabled ? (sensorSmState == SM_ACTIVE ? "green" : "blue") : "gray";
   String smLabel = sensorTriggerEnabled ? (sensorSmState == SM_ACTIVE ? "ACTIVE" : "WAITING") : "DISABLED";
   html += "<div class='status'>Sensor Trigger SM: <span style='color:" + smColor + ";font-weight:bold;'>" + smLabel + "</span> | Max Time: <span class='value'>" + String(SENSOR_TRIGGER_MAX_STIM_SECONDS, 2) + " s</span> | Electrode 1 Trigger: <span class='value'>" + String(electrodeSensorTriggerEnabled[0] ? "ON" : "OFF") + "</span> | Electrode 2 Trigger: <span class='value'>" + String(electrodeSensorTriggerEnabled[1] ? "ON" : "OFF") + "</span></div>";
-  html += "<div class='status'>Electrode 1 Pulse Width: <span class='value'>" + String(hBridges[0].pulseWidthUs) + " Âµs</span></div>";
-  html += "<div class='status'>Electrode 2 Pulse Width: <span class='value'>" + String(hBridges[1].pulseWidthUs) + " Âµs</span></div>";
+  html += "<div class='status'>Electrode 1 Pulse Width: <span class='value'>" + String(hBridges[0].pulseWidthUs) + " us</span></div>";
+  html += "<div class='status'>Electrode 2 Pulse Width: <span class='value'>" + String(hBridges[1].pulseWidthUs) + " us</span></div>";
   html += "</div>";
   
-  // Voltage control
   html += "<div class='section'>";
   html += "<h2>Voltage Control</h2>";
   html += "<div class='label'>Target Voltage (V):</div>";
@@ -127,7 +124,6 @@ void handleRoot() {
   html += "<button onclick=\"updateValue('voltage', document.getElementById('voltage').value)\">Set Voltage</button>";
   html += "</div>";
   
-  // Overcurrent limit control (per H-bridge)
   html += "<div class='section'>";
   html += "<h2>Overcurrent Limit Control</h2>";
   html += "<div class='label'>Electrode 1 Overcurrent Limit (A): <span class='value'>" + String(hBridges[0].maxCurrent, 3) + "</span></div>";
@@ -138,28 +134,26 @@ void handleRoot() {
   html += "<button onclick=\"updateValue('current2', document.getElementById('current2').value)\">Set Electrode 2 Limit</button>";
   html += "<div style='margin-top: 10px; font-size: 0.9em; color: #666;'>";
   html += "I_MAX_1 = GPIO16, I_MAX_2 = GPIO18 (PWM comparator reference)<br>";
-  html += "Current sense resistor: " + String(CURRENT_SENSE_RESISTOR, 1) + "Î©<br>";
+  html += "Current sense resistor: " + String(CURRENT_SENSE_RESISTOR, 1) + " Ohm<br>";
   html += "Electrode 1 ref: " + String(senseVoltage1, 3) + "V, Electrode 2 ref: " + String(senseVoltage2, 3) + "V<br>";
   html += "<strong>Max allowed (95% duty): " + String(maxAllowedCurrent, 3) + "A per channel</strong>";
   html += "</div>";
   html += "</div>";
 
-  // Pulse width control (per H-bridge)
   html += "<div class='section'>";
   html += "<h2>Pulse Width Control</h2>";
-  html += "<div class='label'>Electrode 1 Pulse Width (Âµs): <span class='value'>" + String(hBridges[0].pulseWidthUs) + "</span></div>";
+  html += "<div class='label'>Electrode 1 Pulse Width (us): <span class='value'>" + String(hBridges[0].pulseWidthUs) + "</span></div>";
   html += "<input type='number' id='width1' value='" + String(hBridges[0].pulseWidthUs) + "' step='10' min='" + String(PULSE_WIDTH_MIN_US) + "' max='" + String(PULSE_WIDTH_MAX_US) + "'>";
   html += "<button onclick=\"updateValue('width1', document.getElementById('width1').value)\">Set Electrode 1 Width</button>";
-  html += "<div class='label'>Electrode 2 Pulse Width (Âµs): <span class='value'>" + String(hBridges[1].pulseWidthUs) + "</span></div>";
+  html += "<div class='label'>Electrode 2 Pulse Width (us): <span class='value'>" + String(hBridges[1].pulseWidthUs) + "</span></div>";
   html += "<input type='number' id='width2' value='" + String(hBridges[1].pulseWidthUs) + "' step='10' min='" + String(PULSE_WIDTH_MIN_US) + "' max='" + String(PULSE_WIDTH_MAX_US) + "'>";
   html += "<button onclick=\"updateValue('width2', document.getElementById('width2').value)\">Set Electrode 2 Width</button>";
   html += "<div style='margin-top: 10px; font-size: 0.9em; color: #666;'>";
-  html += "Period: " + String(PULSE_PERIOD_US) + " Âµs, Gap: " + String(PULSE_GAP_US) + " Âµs<br>";
-  html += "Max width per bridge: " + String(PULSE_WIDTH_MAX_US) + " Âµs";
+  html += "Period: " + String(PULSE_PERIOD_US) + " us, Gap: " + String(PULSE_GAP_US) + " us<br>";
+  html += "Max width per bridge: " + String(PULSE_WIDTH_MAX_US) + " us";
   html += "</div>";
   html += "</div>";
 
-  // Sensor threshold control
   html += "<div class='section'>";
   html += "<h2>Sensor Threshold Control</h2>";
   html += "<div class='label'>Sensor 1 Threshold (%): <span class='value'>" + String(SENSOR1_THRESHOLD_PERCENT, 1) + "</span></div>";
@@ -252,22 +246,6 @@ void handleSensorTriggerOff() {
   server.send(303);
 }
 
-void handleSetVoltage() {
-  if (server.hasArg("voltage")) {
-    float newVoltage = server.arg("voltage").toFloat();
-    
-    // Validate voltage range (minimum 0V)
-    if (newVoltage < 0.0f) newVoltage = 0.0f;
-    
-    TARGET_VOLTAGE = newVoltage;
-    
-    Serial.println("Web: Target voltage set to " + String(newVoltage, 1) + "V");
-  }
-  
-  server.sendHeader("Location", "/");
-  server.send(303);
-}
-
 void handleSet() {
   if (server.hasArg("param") && server.hasArg("value")) {
     String param = server.arg("param");
@@ -289,11 +267,11 @@ void handleSet() {
     }
     else if (param == "width1") {
       setPulseWidth(0, (unsigned long)value);
-      server.send(200, "text/plain", "Electrode 1 pulse width set to " + String(hBridges[0].pulseWidthUs) + " Âµs");
+      server.send(200, "text/plain", "Electrode 1 pulse width set to " + String(hBridges[0].pulseWidthUs) + " us");
     }
     else if (param == "width2") {
       setPulseWidth(1, (unsigned long)value);
-      server.send(200, "text/plain", "Electrode 2 pulse width set to " + String(hBridges[1].pulseWidthUs) + " Âµs");
+      server.send(200, "text/plain", "Electrode 2 pulse width set to " + String(hBridges[1].pulseWidthUs) + " us");
     }
     else if (param == "threshold1") {
       if (value < 0.0f) value = 0.0f;
@@ -357,7 +335,7 @@ void handleStatus() {
   json += "\"electrode1CycleEnabled\":" + String(electrodeCycleEnabled[0] ? "true" : "false") + ",";
   json += "\"electrode2CycleEnabled\":" + String(electrodeCycleEnabled[1] ? "true" : "false") + ",";
   json += "\"sensor1Percent\":" + String(sensor1Percent, 1) + ",";
-  json += "\"pressureHigh\":" + String(pressureHigh ? "true" : "false") + ",";
+  json += "\"sensor1High\":" + String(sensor1High ? "true" : "false") + ",";
   json += "\"sensor2Percent\":" + String(sensor2Percent, 1) + ",";
   json += "\"sensor2High\":" + String(sensor2High ? "true" : "false") + ",";
   json += "\"sensorTriggerEnabled\":" + String(sensorTriggerEnabled ? "true" : "false") + ",";
@@ -374,7 +352,6 @@ void handleStatus() {
 
 void setupWebServer()
 {
-  // Initialize WiFi as Access Point
   Serial.println("Setting up WiFi Access Point...");
   WiFi.mode(WIFI_AP);
   WiFi.softAP(ssid, password);
@@ -384,9 +361,7 @@ void setupWebServer()
   Serial.println(IP);
   Serial.println("Connect to the AP and navigate to: http://" + IP.toString());
 
-  // Configure web server routes
   server.on("/", handleRoot);
-  server.on("/setVoltage", HTTP_POST, handleSetVoltage);
   server.on("/status", handleStatus);
   server.on("/set", handleSet);
   server.on("/cycle/electrode1/on", handleCycleElectrode1On);
@@ -397,7 +372,6 @@ void setupWebServer()
   server.on("/sensor/electrode2/on", handleSensorTriggerElectrode2On);
   server.on("/sensor/off", handleSensorTriggerOff);
   
-  // Start web server
   server.begin();
   Serial.println("Web server started");
 }
