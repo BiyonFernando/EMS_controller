@@ -36,8 +36,14 @@ float sensor2Percent = 0.0f;
 bool sensor2High = false;
 bool prevSensor2High = false;
 
-SmState sensorSmState = SM_WAITING;
 bool sensorTriggerEnabled = false;
 bool electrodeSensorTriggerEnabled[NUM_HBRIDGES] = {false, false};
-unsigned long sensorTriggerStartTime = 0;
-float SENSOR_TRIGGER_MAX_STIM_SECONDS = 0.55f;
+bool electrodeTriggerEvents[NUM_HBRIDGES][SENSOR_TRIGGER_EVENT_COUNT] = {
+  {false, false, false, false},
+  {false, false, false, false},
+};
+bool electrodeStimActive[NUM_HBRIDGES] = {false, false};
+unsigned long electrodeStimStartTime[NUM_HBRIDGES] = {0, 0};
+unsigned long electrodeSilentUntil[NUM_HBRIDGES] = {0, 0};
+float electrodeStimDurationSeconds[NUM_HBRIDGES] = {0.55f, 0.55f};
+float electrodeSilentSeconds[NUM_HBRIDGES] = {1.05f, 1.05f};

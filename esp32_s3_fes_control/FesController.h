@@ -75,12 +75,22 @@ extern float sensor2Percent;
 extern bool sensor2High;
 extern bool prevSensor2High;
 
-enum SmState { SM_WAITING, SM_ACTIVE };
-extern SmState sensorSmState;
+enum SensorTriggerEvent {
+  SENSOR1_FALLING = 0,
+  SENSOR2_FALLING = 1,
+  SENSOR1_RISING = 2,
+  SENSOR2_RISING = 3,
+  SENSOR_TRIGGER_EVENT_COUNT = 4
+};
+
 extern bool sensorTriggerEnabled;
 extern bool electrodeSensorTriggerEnabled[NUM_HBRIDGES];
-extern unsigned long sensorTriggerStartTime;
-extern float SENSOR_TRIGGER_MAX_STIM_SECONDS;
+extern bool electrodeTriggerEvents[NUM_HBRIDGES][SENSOR_TRIGGER_EVENT_COUNT];
+extern bool electrodeStimActive[NUM_HBRIDGES];
+extern unsigned long electrodeStimStartTime[NUM_HBRIDGES];
+extern unsigned long electrodeSilentUntil[NUM_HBRIDGES];
+extern float electrodeStimDurationSeconds[NUM_HBRIDGES];
+extern float electrodeSilentSeconds[NUM_HBRIDGES];
 
 constexpr unsigned long OVERCURRENT_RECOVERY_MS = 5000;
 constexpr int COMPARATOR_DEBOUNCE_CHECKS = 2;
@@ -98,9 +108,8 @@ float readOutputVoltage();
 void updateFeedbackControl();
 void setupVoltageControl();
 
-void setSensorTriggeredElectrodes(bool enabled);
 void updatePressureSensor();
-void startElectrodeSensorTrigger(int bridgeIndex);
+void stopAllSensorTriggers();
 void setupSensorControl();
 
 void setHBridgeOff(HBridgeChannel& hb);
@@ -122,9 +131,6 @@ void handleRoot();
 void handleCycleElectrode1On();
 void handleCycleElectrode2On();
 void handleCycleOff();
-void handleSensorTriggerElectrode1On();
-void handleSensorTriggerElectrode2On();
-void handleSensorTriggerOn();
 void handleSensorTriggerOff();
 void handleSet();
 void handleStatus();

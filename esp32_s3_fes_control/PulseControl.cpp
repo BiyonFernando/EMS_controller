@@ -79,10 +79,11 @@ void IRAM_ATTR onPulseTimer() {
   portENTER_CRITICAL_ISR(&timerMux);
 
   unsigned long phaseUs = micros() % PULSE_PERIOD_US;
-  bool enabled = pulseOutputEnabled;
+  bool cycleActive = pulseCycleEnabled && cyclePhaseOn;
 
   for (int i = 0; i < NUM_HBRIDGES; i++) {
-    updateHBridgePulse(hBridges[i], phaseUs, enabled && hBridges[i].enabled);
+    bool bridgeEnabled = electrodeStimActive[i] || (electrodeCycleEnabled[i] && cycleActive);
+    updateHBridgePulse(hBridges[i], phaseUs, bridgeEnabled && hBridges[i].enabled);
   }
 
   portEXIT_CRITICAL_ISR(&timerMux);
@@ -95,10 +96,26 @@ bool anyElectrodeCycleEnabled() {
   return false;
 }
 
+static bool anySensorStimActiveForPulseGate()
+{
+  for (int i = 0; i < NUM_HBRIDGES; i++) {
+    if (electrodeStimActive[i]) return true;
+  }
+  return false;
+}
+
 void startElectrodeCycle(int bridgeIndex) {
   if (bridgeIndex < 0 || bridgeIndex >= NUM_HBRIDGES) return;
 
   portENTER_CRITICAL(&timerMux);
+  electrodeSensorTriggerEnabled[bridgeIndex] = false;
+  electrodeStimActive[bridgeIndex] = false;
+  electrodeStimStartTime[bridgeIndex] = 0;
+  electrodeSilentUntil[bridgeIndex] = 0;
+  for (int eventIndex = 0; eventIndex < SENSOR_TRIGGER_EVENT_COUNT; eventIndex++) {
+    electrodeTriggerEvents[bridgeIndex][eventIndex] = false;
+  }
+  sensorTriggerEnabled = electrodeSensorTriggerEnabled[0] || electrodeSensorTriggerEnabled[1];
   electrodeCycleEnabled[bridgeIndex] = true;
   hBridges[bridgeIndex].enabled = true;
   pulseCycleEnabled = true;
@@ -116,7 +133,7 @@ void updatePulseCycle() {
   if (!pulseCycleEnabled) return;
   if (!anyElectrodeCycleEnabled()) {
     pulseCycleEnabled = false;
-    pulseOutputEnabled = false;
+    pulseOutputEnabled = anySensorStimActiveForPulseGate();
     return;
   }
 
@@ -124,7 +141,7 @@ void updatePulseCycle() {
   unsigned long elapsed = now - cycleLastToggle;
 
   if (cyclePhaseOn && elapsed >= CYCLE_ON_MS) {
-    pulseOutputEnabled = false;
+    pulseOutputEnabled = anySensorStimActiveForPulseGate();
     cyclePhaseOn = false;
     cycleLastToggle = now;
     Serial.println("EMS Cycle: OFF phase");
