@@ -38,7 +38,36 @@ void handleRoot() {
   html += "    })";
   html += "    .catch(() => {});";
   html += "}";
-  html += "function downloadSensorCsv() {";
+  html += "function pad2(value) {";
+  html += "  return String(value).padStart(2, '0');";
+  html += "}";
+  html += "function formatTimestampForFilename(date) {";
+  html += "  var y = date.getFullYear();";
+  html += "  var m = pad2(date.getMonth() + 1);";
+  html += "  var d = pad2(date.getDate());";
+  html += "  var h = pad2(date.getHours());";
+  html += "  var min = pad2(date.getMinutes());";
+  html += "  var s = pad2(date.getSeconds());";
+  html += "  return y + m + d + '_' + h + min + s;";
+  html += "}";
+  html += "function buildElectrodeConfig(electrodeNumber, status) {";
+  html += "  var prefix = electrodeNumber == 1 ? 'e1' : 'e2';";
+  html += "  var events = '';";
+  html += "  if (status[prefix + 'Sensor1Falling']) events += 'F1';";
+  html += "  if (status[prefix + 'Sensor1Rising']) events += 'R1';";
+  html += "  if (status[prefix + 'Sensor2Falling']) events += 'F2';";
+  html += "  if (status[prefix + 'Sensor2Rising']) events += 'R2';";
+  html += "  if (events.length == 0) events = 'None';";
+  html += "  var stimSeconds = electrodeNumber == 1 ? status.electrode1StimDuration : status.electrode2StimDuration;";
+  html += "  var silentSeconds = electrodeNumber == 1 ? status.electrode1SilentPeriod : status.electrode2SilentPeriod;";
+  html += "  var stimMs = Math.round((parseFloat(stimSeconds) || 0) * 1000);";
+  html += "  var silentMs = Math.round((parseFloat(silentSeconds) || 0) * 1000);";
+  html += "  return 'E' + electrodeNumber + '-' + events + '-' + stimMs + '-' + silentMs;";
+  html += "}";
+  html += "function buildSensorLogFilename(status) {";
+  html += "  return 'sensor_log_' + formatTimestampForFilename(new Date()) + '_' + buildElectrodeConfig(1, status) + '_' + buildElectrodeConfig(2, status) + '.csv';";
+  html += "}";
+  html += "function downloadSensorCsv(filename) {";
   html += "  var csv = 'timestamp,event,triggered\\n';";
   html += "  sensorLogRows.forEach(row => {";
   html += "    csv += row.timestamp + ',' + row.event + ',' + row.triggered + '\\n';";
@@ -46,23 +75,29 @@ void handleRoot() {
   html += "  var blob = new Blob([csv], {type: 'text/csv'});";
   html += "  var link = document.createElement('a');";
   html += "  link.href = URL.createObjectURL(blob);";
-  html += "  link.download = 'sensor_trigger_log.csv';";
+  html += "  link.download = filename;";
   html += "  document.body.appendChild(link);";
   html += "  link.click();";
   html += "  document.body.removeChild(link);";
   html += "  URL.revokeObjectURL(link.href);";
   html += "}";
   html += "function disableSensorTrigger() {";
-  html += "  fetch('/sensor/log')";
-  html += "    .then(response => response.json())";
-  html += "    .then(data => {";
-  html += "      (data.entries || []).forEach(entry => sensorLogRows.push(entry));";
-  html += "      downloadSensorCsv();";
-  html += "      location.href = '/sensor/off';";
+  html += "  Promise.all([fetch('/sensor/log').then(response => response.json()), fetch('/status').then(response => response.json())])";
+  html += "    .then(results => {";
+  html += "      var logData = results[0];";
+  html += "      var status = results[1];";
+  html += "      (logData.entries || []).forEach(entry => sensorLogRows.push(entry));";
+  html += "      var filename = buildSensorLogFilename(status);";
+  html += "      fetch('/sensor/off')";
+  html += "        .then(() => { downloadSensorCsv(filename); location.reload(); })";
+  html += "        .catch(() => { downloadSensorCsv(filename); location.reload(); });";
   html += "    })";
   html += "    .catch(() => {";
-  html += "      downloadSensorCsv();";
-  html += "      location.href = '/sensor/off';";
+  html += "      var fallback = {e1Sensor1Falling:false,e1Sensor1Rising:false,e1Sensor2Falling:false,e1Sensor2Rising:false,e2Sensor1Falling:false,e2Sensor1Rising:false,e2Sensor2Falling:false,e2Sensor2Rising:false,electrode1StimDuration:0,electrode1SilentPeriod:0,electrode2StimDuration:0,electrode2SilentPeriod:0};";
+  html += "      var filename = buildSensorLogFilename(fallback);";
+  html += "      fetch('/sensor/off')";
+  html += "        .then(() => { downloadSensorCsv(filename); location.reload(); })";
+  html += "        .catch(() => { downloadSensorCsv(filename); location.reload(); });";
   html += "    });";
   html += "}";
   html += "function updateValue(param, value) {";
@@ -330,7 +365,7 @@ static bool setTriggerEventParam(const String& param, bool checked)
   sensorTriggerEnabled = electrodeSensorTriggerEnabled[0] || electrodeSensorTriggerEnabled[1];
   if (!sensorTriggerEnabled && activeTriggerMode == TRIGGER_MODE_SENSOR_TRIGGERED) {
     activeTriggerMode = TRIGGER_MODE_NONE;
-    lastSensorLogPingTime = 0;
+    lastTriggerModePingTime = 0;
   }
   pulseOutputEnabled = electrodeStimActive[0] || electrodeStimActive[1] || (pulseCycleEnabled && cyclePhaseOn);
   portEXIT_CRITICAL(&timerMux);
@@ -474,7 +509,7 @@ void handleStatus() {
 
 void handleSensorLog()
 {
-  noteSensorLogPing();
+  noteTriggerModePing();
   server.send(200, "application/json", consumeSensorEventLogJson());
 }
 

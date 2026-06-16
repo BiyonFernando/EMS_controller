@@ -148,20 +148,19 @@ static void handleSensorTriggerEvents(bool sensor1HighNow, bool sensor2HighNow)
   }
 }
 
-static void updateSensorLogWatchdog()
+void updateTriggerModePingWatchdog()
 {
-  if (activeTriggerMode != TRIGGER_MODE_SENSOR_TRIGGERED || !sensorTriggerEnabled) return;
-  if (lastSensorLogPingTime == 0) return;
+  if (activeTriggerMode == TRIGGER_MODE_NONE) return;
+  if (lastTriggerModePingTime == 0) return;
 
-  if (millis() - lastSensorLogPingTime > SENSOR_LOG_PING_TIMEOUT_MS) {
+  if (millis() - lastTriggerModePingTime > TRIGGER_MODE_PING_TIMEOUT_MS) {
     stopAllTriggering();
-    Serial.println("Safety: sensor trigger disabled because Web UI log ping timed out");
+    Serial.println("Safety: trigger mode disabled because Web UI ping timed out");
   }
 }
 
 void updatePressureSensor()
 {
-  updateSensorLogWatchdog();
   updateSensorStimTimers();
 
   if (millis() - lastPressureTime < PRESSURE_SAMPLE_MS) return;
@@ -208,7 +207,7 @@ void startElectrodeSensorTrigger(int bridgeIndex)
   digitalWrite(hBridges[bridgeIndex].posPin, LOW);
   digitalWrite(hBridges[bridgeIndex].negPin, LOW);
   sensorTriggerEnabled = true;
-  lastSensorLogPingTime = millis();
+  lastTriggerModePingTime = millis();
   pulseOutputEnabled = anySensorStimActive();
   portEXIT_CRITICAL(&timerMux);
 
@@ -223,9 +222,9 @@ void stopAllSensorTriggers()
   Serial.println("Web: Sensor trigger mode DISABLED");
 }
 
-void noteSensorLogPing()
+void noteTriggerModePing()
 {
-  lastSensorLogPingTime = millis();
+  lastTriggerModePingTime = millis();
 }
 
 String consumeSensorEventLogJson()

@@ -101,7 +101,7 @@ extern float electrodeStimDurationSeconds[NUM_HBRIDGES];
 extern float electrodeSilentSeconds[NUM_HBRIDGES];
 
 constexpr int SENSOR_EVENT_LOG_CAPACITY = 80;
-constexpr unsigned long SENSOR_LOG_PING_TIMEOUT_MS = 1000;
+constexpr unsigned long TRIGGER_MODE_PING_TIMEOUT_MS = 1000;
 
 struct SensorEventLogEntry {
   unsigned long timestampMs;
@@ -111,7 +111,7 @@ struct SensorEventLogEntry {
 
 extern SensorEventLogEntry sensorEventLog[SENSOR_EVENT_LOG_CAPACITY];
 extern int sensorEventLogCount;
-extern unsigned long lastSensorLogPingTime;
+extern unsigned long lastTriggerModePingTime;
 
 constexpr unsigned long OVERCURRENT_RECOVERY_MS = 5000;
 constexpr int COMPARATOR_DEBOUNCE_CHECKS = 2;
@@ -134,7 +134,8 @@ void startElectrodeSensorTrigger(int bridgeIndex);
 void stopAllSensorTriggers();
 void prepareTriggerMode(TriggerMode requestedMode);
 void stopAllTriggering();
-void noteSensorLogPing();
+void noteTriggerModePing();
+void updateTriggerModePingWatchdog();
 String consumeSensorEventLogJson();
 void setupSensorControl();
 

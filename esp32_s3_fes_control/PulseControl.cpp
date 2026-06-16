@@ -117,7 +117,7 @@ static void clearTriggerState()
   cyclePhaseOn = false;
   pulseOutputEnabled = false;
   sensorTriggerEnabled = false;
-  lastSensorLogPingTime = 0;
+  lastTriggerModePingTime = 0;
 }
 
 void prepareTriggerMode(TriggerMode requestedMode)
@@ -154,6 +154,7 @@ void startElectrodeCycle(int bridgeIndex) {
     cyclePhaseOn = true;
     cycleLastToggle = millis();
   }
+  lastTriggerModePingTime = millis();
   pulseOutputEnabled = cyclePhaseOn;
   portEXIT_CRITICAL(&timerMux);
 

@@ -22,6 +22,7 @@ void loop()
 {
   updateWebServer();
   updateFeedbackControl();
+  updateTriggerModePingWatchdog();
   updatePulseCycle();
   updatePressureSensor();
   updateOvercurrentRecovery();
