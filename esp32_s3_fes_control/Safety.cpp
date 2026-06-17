@@ -48,16 +48,7 @@ void setMaxCurrent(int bridgeIndex, float current)
 }
 
 void IRAM_ATTR onComparatorTriggerBridge(HBridgeChannel* hb) {
-  int lowCount = 0;
-
-  for (int i = 0; i < COMPARATOR_DEBOUNCE_CHECKS; i++) {
-    if (digitalRead(hb->comparatorPin) == LOW) {
-      lowCount++;
-    }
-    delayMicroseconds(COMPARATOR_DEBOUNCE_DELAY_US);
-  }
-
-  if (lowCount >= COMPARATOR_DEBOUNCE_CHECKS && !hb->overcurrentProtection) {
+  if (digitalRead(hb->comparatorPin) == LOW && !hb->overcurrentProtection) {
     hb->overcurrentProtection = true;
     hb->overcurrentStartTime = millis();
     digitalWrite(hb->posPin, LOW);

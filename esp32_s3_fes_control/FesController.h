@@ -114,8 +114,6 @@ extern int sensorEventLogCount;
 extern unsigned long lastTriggerModePingTime;
 
 constexpr unsigned long OVERCURRENT_RECOVERY_MS = 5000;
-constexpr int COMPARATOR_DEBOUNCE_CHECKS = 2;
-constexpr int COMPARATOR_DEBOUNCE_DELAY_US = 2;
 
 constexpr float CURRENT_SENSE_RESISTOR = 16.5f;
 constexpr float ESP32_PWM_VOLTAGE = 3.3f;
