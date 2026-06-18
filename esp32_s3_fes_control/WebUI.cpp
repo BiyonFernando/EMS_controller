@@ -141,6 +141,7 @@ void handleRoot() {
   html += "      document.querySelectorAll('.status')[13].innerHTML = 'Sensor Trigger: <span class=\"value\">' + (data.sensorTriggerEnabled ? 'ENABLED' : 'DISABLED') + '</span> | Electrode 1: <span class=\"value\">' + data.electrode1SensorState + '</span> | Electrode 2: <span class=\"value\">' + data.electrode2SensorState + '</span>';";
   html += "      document.querySelectorAll('.status')[14].innerHTML = 'Electrode 1 Pulse Width: <span class=\"value\">' + data.pulseWidth1 + ' us</span>';";
   html += "      document.querySelectorAll('.status')[15].innerHTML = 'Electrode 2 Pulse Width: <span class=\"value\">' + data.pulseWidth2 + ' us</span>';";
+  html += "      document.querySelectorAll('.status')[16].innerHTML = 'Boost Kp: <span class=\"value\">' + data.kp.toFixed(6) + '</span> | Kd: <span class=\"value\">' + data.kd.toFixed(6) + '</span>';";
   html += "    });";  
   html += "}";
   html += "setInterval(updateStatus, 1000);";
@@ -214,6 +215,7 @@ void handleRoot() {
   html += "<div class='status'>Sensor Trigger: <span class='value'>" + String(sensorTriggerEnabled ? "ENABLED" : "DISABLED") + "</span> | Electrode 1: <span class='value'>" + e1SensorState + "</span> | Electrode 2: <span class='value'>" + e2SensorState + "</span></div>";
   html += "<div class='status'>Electrode 1 Pulse Width: <span class='value'>" + String(hBridges[0].pulseWidthUs) + " us</span></div>";
   html += "<div class='status'>Electrode 2 Pulse Width: <span class='value'>" + String(hBridges[1].pulseWidthUs) + " us</span></div>";
+  html += "<div class='status'>Boost Kp: <span class='value'>" + String(Kp, 6) + "</span> | Kd: <span class='value'>" + String(Kd, 6) + "</span></div>";
   html += "</div>";
   
   html += "<div class='section'>";
@@ -224,7 +226,7 @@ void handleRoot() {
   html += "<button onclick=\"adjustVoltage(-2.5)\" style='background: #607D8B;'>-2.5 V</button>";
   html += "<button onclick=\"updateValue('voltage', document.getElementById('voltage').value)\">Set Voltage</button>";
   html += "</div>";
-  
+
   html += "<div class='section'>";
   html += "<h2>Overcurrent Limit Control</h2>";
   html += "<div class='label'>Electrode 1 Overcurrent Limit (A): <span class='value'>" + String(hBridges[0].maxCurrent, 3) + "</span></div>";
@@ -264,6 +266,16 @@ void handleRoot() {
   html += "<div class='label'>Sensor 2 Threshold (%): <span class='value'>" + String(SENSOR2_THRESHOLD_PERCENT, 1) + "</span></div>";
   html += "<input type='number' id='threshold2' value='" + String(SENSOR2_THRESHOLD_PERCENT, 1) + "' step='1' min='0' max='100'>";
   html += "<button onclick=\"updateValue('threshold2', document.getElementById('threshold2').value)\">Set Sensor 2 Threshold</button>";
+  html += "</div>";
+
+  html += "<div class='section'>";
+  html += "<h2>Boost Controller Tuning</h2>";
+  html += "<div class='label'>Kp: <span class='value'>" + String(Kp, 6) + "</span></div>";
+  html += "<input type='number' id='kp' value='" + String(Kp, 6) + "' step='0.0001' min='0'>";
+  html += "<button onclick=\"updateValue('kp', document.getElementById('kp').value)\">Set Kp</button>";
+  html += "<div class='label'>Kd: <span class='value'>" + String(Kd, 6) + "</span></div>";
+  html += "<input type='number' id='kd' value='" + String(Kd, 6) + "' step='0.0001' min='0'>";
+  html += "<button onclick=\"updateValue('kd', document.getElementById('kd').value)\">Set Kd</button>";
   html += "</div>";
 
   html += "</div></body></html>";
@@ -387,6 +399,18 @@ void handleSet() {
       Serial.println("Set target voltage to " + String(value, 1) + "V");
       server.send(200, "text/plain", "Voltage set to " + String(value, 1) + "V");
     }
+    else if (param == "kp") {
+      if (value < 0.0f) value = 0.0f;
+      Kp = value;
+      Serial.println("Set boost controller Kp to " + String(Kp, 6));
+      server.send(200, "text/plain", "Kp set to " + String(Kp, 6));
+    }
+    else if (param == "kd") {
+      if (value < 0.0f) value = 0.0f;
+      Kd = value;
+      Serial.println("Set boost controller Kd to " + String(Kd, 6));
+      server.send(200, "text/plain", "Kd set to " + String(Kd, 6));
+    }
     else if (param == "current1") {
       setMaxCurrent(0, value);
       server.send(200, "text/plain", "Electrode 1 overcurrent limit set to " + String(hBridges[0].maxCurrent, 3) + "A");
@@ -466,6 +490,8 @@ void handleStatus() {
   json += "\"targetVoltage\":" + String(TARGET_VOLTAGE, 1) + ",";
   json += "\"currentVoltage\":" + String(readOutputVoltage(), 1) + ",";
   json += "\"currentDuty\":" + String(currentDuty * 100, 2) + ",";
+  json += "\"kp\":" + String(Kp, 6) + ",";
+  json += "\"kd\":" + String(Kd, 6) + ",";
   json += "\"maxCurrent1\":" + String(hBridges[0].maxCurrent, 3) + ",";
   json += "\"maxCurrent2\":" + String(hBridges[1].maxCurrent, 3) + ",";
   json += "\"senseVoltage1\":" + String(senseVoltage1, 3) + ",";

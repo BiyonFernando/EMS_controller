@@ -19,6 +19,8 @@ constexpr int PIN_SENSOR_2 = 3;
 
 constexpr int NUM_HBRIDGES = 2;
 
+extern hw_timer_t *overcurrentTimers[NUM_HBRIDGES];
+
 struct HBridgeChannel {
   const int posPin;
   const int negPin;
@@ -27,6 +29,9 @@ struct HBridgeChannel {
   volatile int lastPulseState;
   volatile bool overcurrentProtection;
   volatile unsigned long overcurrentStartTime;
+  volatile bool overcurrentPending;
+  volatile unsigned long overcurrentPendingStartUs;
+  volatile bool overcurrentVerifyWindow;
   volatile unsigned long pulseWidthUs;
   volatile bool enabled;
   float maxCurrent;
@@ -42,8 +47,8 @@ constexpr float R_BOTTOM = 10000.0f;
 
 extern float TARGET_VOLTAGE;
 constexpr unsigned long FEEDBACK_INTERVAL_MS = 100;
-constexpr float Kp = 0.001f;
-constexpr float Kd = 0.000f;
+extern float Kp;
+extern float Kd;
 
 extern float currentDuty;
 extern unsigned long lastFeedbackTime;
@@ -114,6 +119,7 @@ extern int sensorEventLogCount;
 extern unsigned long lastTriggerModePingTime;
 
 constexpr unsigned long OVERCURRENT_RECOVERY_MS = 5000;
+constexpr unsigned long OVERCURRENT_VERIFY_DELAY_US = 25;
 
 constexpr float CURRENT_SENSE_RESISTOR = 16.5f;
 constexpr float ESP32_PWM_VOLTAGE = 3.3f;

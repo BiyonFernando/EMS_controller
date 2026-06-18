@@ -6,14 +6,17 @@ const char* password = "123456789";
 WebServer server(80);
 
 hw_timer_t *pulseTimer = NULL;
+hw_timer_t *overcurrentTimers[NUM_HBRIDGES] = {NULL, NULL};
 portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
 
 HBridgeChannel hBridges[NUM_HBRIDGES] = {
-  {13, 14, 6, 16, -1, false, 0, 400, false, 0.5f},
-  {15, 17, 7, 18, -1, false, 0, 400, false, 0.5f},
+  {13, 14, 6, 16, -1, false, 0, false, 0, false, 400, false, 0.5f},
+  {15, 17, 7, 18, -1, false, 0, false, 0, false, 400, false, 0.5f},
 };
 
 float TARGET_VOLTAGE = 0.0f;
+float Kp = 0.002f;
+float Kd = 0.0001f;
 float currentDuty = 0.0f;
 unsigned long lastFeedbackTime = 0;
 float previousError = 0.0f;

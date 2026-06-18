@@ -47,45 +47,150 @@ void setMaxCurrent(int bridgeIndex, float current)
   Serial.println(" %");
 }
 
-void IRAM_ATTR onComparatorTriggerBridge(HBridgeChannel* hb) {
-  if (digitalRead(hb->comparatorPin) == LOW && !hb->overcurrentProtection) {
-    hb->overcurrentProtection = true;
-    hb->overcurrentStartTime = millis();
-    digitalWrite(hb->posPin, LOW);
-    digitalWrite(hb->negPin, LOW);
+static void IRAM_ATTR enableComparatorInterrupt(int bridgeIndex)
+{
+  if (bridgeIndex == 0) {
+    attachInterrupt(digitalPinToInterrupt(hBridges[0].comparatorPin), onComparator0Trigger, FALLING);
+  } else if (bridgeIndex == 1) {
+    attachInterrupt(digitalPinToInterrupt(hBridges[1].comparatorPin), onComparator1Trigger, FALLING);
   }
 }
 
+static void IRAM_ATTR disableComparatorInterrupt(int bridgeIndex)
+{
+  detachInterrupt(digitalPinToInterrupt(hBridges[bridgeIndex].comparatorPin));
+}
+
+static void IRAM_ATTR armOvercurrentTimer(int bridgeIndex)
+{
+  timerWrite(overcurrentTimers[bridgeIndex], 0);
+  timerAlarm(overcurrentTimers[bridgeIndex], OVERCURRENT_VERIFY_DELAY_US, false, 0);
+}
+
+static void IRAM_ATTR startOvercurrentPending(int bridgeIndex, unsigned long nowUs)
+{
+  HBridgeChannel& hb = hBridges[bridgeIndex];
+  hb.overcurrentPending = true;
+  hb.overcurrentVerifyWindow = false;
+  hb.overcurrentPendingStartUs = nowUs;
+  disableComparatorInterrupt(bridgeIndex);
+  armOvercurrentTimer(bridgeIndex);
+}
+
+static void IRAM_ATTR confirmOvercurrent(int bridgeIndex)
+{
+  HBridgeChannel& hb = hBridges[bridgeIndex];
+  digitalWrite(hb.posPin, LOW);
+  digitalWrite(hb.negPin, LOW);
+  hb.lastPulseState = -1;
+  hb.overcurrentProtection = true;
+  hb.overcurrentStartTime = millis();
+  hb.overcurrentPending = false;
+  hb.overcurrentVerifyWindow = false;
+  disableComparatorInterrupt(bridgeIndex);
+}
+
+void IRAM_ATTR onComparatorTriggerBridge(int bridgeIndex) {
+  HBridgeChannel& hb = hBridges[bridgeIndex];
+  unsigned long nowUs = micros();
+
+  if (hb.overcurrentProtection) {
+    return;
+  }
+
+  if (!hb.overcurrentPending) {
+    startOvercurrentPending(bridgeIndex, nowUs);
+    return;
+  }
+
+  if (hb.overcurrentVerifyWindow) {
+    if (nowUs - hb.overcurrentPendingStartUs <= OVERCURRENT_VERIFY_DELAY_US) {
+      confirmOvercurrent(bridgeIndex);
+    } else {
+      startOvercurrentPending(bridgeIndex, nowUs);
+    }
+  }
+}
+
+static void IRAM_ATTR onOvercurrentTimerBridge(int bridgeIndex)
+{
+  HBridgeChannel& hb = hBridges[bridgeIndex];
+
+  if (hb.overcurrentProtection) {
+    return;
+  }
+
+  if (!hb.overcurrentPending) {
+    return;
+  }
+
+  if (!hb.overcurrentVerifyWindow) {
+    hb.overcurrentVerifyWindow = true;
+    hb.overcurrentPendingStartUs = micros();
+    enableComparatorInterrupt(bridgeIndex);
+    armOvercurrentTimer(bridgeIndex);
+    return;
+  }
+
+  hb.overcurrentPending = false;
+  hb.overcurrentVerifyWindow = false;
+}
+
 void IRAM_ATTR onComparator0Trigger() {
-  onComparatorTriggerBridge(&hBridges[0]);
+  onComparatorTriggerBridge(0);
 }
 
 void IRAM_ATTR onComparator1Trigger() {
-  onComparatorTriggerBridge(&hBridges[1]);
+  onComparatorTriggerBridge(1);
+}
+
+void IRAM_ATTR onOvercurrentTimer0() {
+  onOvercurrentTimerBridge(0);
+}
+
+void IRAM_ATTR onOvercurrentTimer1() {
+  onOvercurrentTimerBridge(1);
 }
 
 void updateOvercurrentRecovery()
 {
   for (int i = 0; i < NUM_HBRIDGES; i++) {
-    if (hBridges[i].overcurrentProtection) {
-      unsigned long timeSinceOvercurrent = millis() - hBridges[i].overcurrentStartTime;
+    if (!hBridges[i].overcurrentProtection) continue;
 
-      if (timeSinceOvercurrent >= OVERCURRENT_RECOVERY_MS) {
-        hBridges[i].overcurrentProtection = false;
-        Serial.print("H-Bridge ");
-        Serial.print(i + 1);
-        Serial.print(" overcurrent recovery attempt after ");
-        Serial.print(timeSinceOvercurrent);
-        Serial.println(" ms");
-      }
-    }
+    unsigned long timeSinceOvercurrent = millis() - hBridges[i].overcurrentStartTime;
+    if (timeSinceOvercurrent < OVERCURRENT_RECOVERY_MS) continue;
+
+    hBridges[i].overcurrentProtection = false;
+    hBridges[i].overcurrentPending = false;
+    hBridges[i].overcurrentVerifyWindow = false;
+    hBridges[i].lastPulseState = -1;
+    enableComparatorInterrupt(i);
+
+    Serial.print("H-Bridge ");
+    Serial.print(i + 1);
+    Serial.print(" overcurrent recovery after ");
+    Serial.print(timeSinceOvercurrent);
+    Serial.println(" ms");
   }
 }
 
 void setupSafety()
 {
-  attachInterrupt(digitalPinToInterrupt(hBridges[0].comparatorPin), onComparator0Trigger, FALLING);
-  attachInterrupt(digitalPinToInterrupt(hBridges[1].comparatorPin), onComparator1Trigger, FALLING);
+  overcurrentTimers[0] = timerBegin(1000000);
+  overcurrentTimers[1] = timerBegin(1000000);
+
+  if (overcurrentTimers[0] == NULL || overcurrentTimers[1] == NULL) {
+    Serial.println("ERROR: Overcurrent debounce timer initialization failed!");
+    while (true) {
+      delay(1000);
+    }
+  }
+
+  timerAttachInterrupt(overcurrentTimers[0], &onOvercurrentTimer0);
+  timerAttachInterrupt(overcurrentTimers[1], &onOvercurrentTimer1);
+
+  enableComparatorInterrupt(0);
+  enableComparatorInterrupt(1);
   Serial.println("Overcurrent protection enabled on GPIO6 (H-Bridge 1) and GPIO7 (H-Bridge 2)");
 
   for (int i = 0; i < NUM_HBRIDGES; i++) {
